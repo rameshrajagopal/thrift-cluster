@@ -47,16 +47,24 @@ int main(void)
     boost::shared_ptr<TTransport> socket(new TSocket(SERVER_IP, SERVER_PORT));
     boost::shared_ptr<TTransport> transport(new TFramedTransport(socket));
     boost::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-    ArithmeticServiceClient client(protocol);
+    ArithmeticServiceConcurrentClient client(protocol);
 
     /* do the work */
-    try {
-        transport->open();
-        int32_t ret  = client.multiply(10, 20);
-        cout << "ret: " << ret << endl;
-        transport->close();
-    } catch (TException& tx) {
-        std::cout << "ERROR: " << tx.what() << std::endl;
+    for (int t = 0; t < 2; ++t) {
+        thread th([&client, t, &transport]() {
+            try {
+                transport->open();
+                for (int num = 0; num < 10; ++num) {
+                    cout << "th " << t << " req: " << num << endl;
+                    int32_t ret  = client.multiply(10, 20);
+                    cout << "th " << t << " res: " << num << endl;
+                }
+                transport->close();
+            } catch (TException & tx) {
+                    std::cout << "ERROR: " << tx.what() << std::endl;
+            }
+        });
+        th.detach();
     }
     getchar();
     return 0;
