@@ -11,6 +11,8 @@
 #include <thrift/concurrency/PosixThreadFactory.h>
 #include <thrift/server/TNonblockingServer.h>
 
+#include <atomic>
+
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
@@ -18,7 +20,9 @@ using namespace ::apache::thrift::server;
 using namespace ::apache::thrift::concurrency;
 
 #define MAX_NUM_THREADS (10)
-#define DBG_PRINT(fmt...) printf(fmt)
+class ProxySlave;
+extern std::shared_ptr<ProxySlave> getProxySlave(const std::string & addr, const int port, int id);
+extern void processRequest(int reqNum, const std::string & req, std::vector<std::shared_ptr<ProxySlave>> & slaves);
 
 using boost::shared_ptr;
 
@@ -26,25 +30,29 @@ using namespace  ::tutorial::arithmetic::gen;
 
 class ArithmeticServiceHandler : virtual public ArithmeticServiceIf {
  public:
-  ArithmeticServiceHandler() {
-    // Your initialization goes here
-  }
+  ArithmeticServiceHandler(std::vector<std::shared_ptr<ProxySlave>> & s):
+       slaves(s)
+    {}
 
   int64_t add(const int32_t num1, const int32_t num2) {
-      DBG_PRINT("%s: %d %d\n", __FUNCTION__, num1, num2);
+      processRequest(reqNum++, "Add", slaves);  
       return num1 + num2;
   }
 
   int64_t multiply(const int32_t num1, const int32_t num2) {
-      DBG_PRINT("%s: %d %d\n", __FUNCTION__, num1, num2);
+      processRequest(reqNum++, "Multiply", slaves);  
       return num1 * num2;
   }
-
+ private:
+  std::atomic<int> reqNum {0};
+  std::vector<std::shared_ptr<ProxySlave>> & slaves;
 };
 
-int main(int argc, char **argv) {
+void masterTask(std::vector<std::shared_ptr<ProxySlave>> & slaves)
+{
   int port = 9090;
-  shared_ptr<ArithmeticServiceHandler> handler(new ArithmeticServiceHandler());
+
+  shared_ptr<ArithmeticServiceHandler> handler(new ArithmeticServiceHandler(slaves));
   shared_ptr<TProcessor> processor(new ArithmeticServiceProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new TFramedTransportFactory());
@@ -59,6 +67,17 @@ int main(int argc, char **argv) {
   TNonblockingServer server(processor, protocolFactory, port, threadManager);
   server.setNumIOThreads(2);
   server.serve();
-  return 0;
+}
+
+#define MAX_NUM_SLAVES  (1)
+int main(int argc, char **argv) 
+{
+   std::vector<std::shared_ptr<ProxySlave>> slaves;
+   for (int num = 0; num < MAX_NUM_SLAVES; ++num) {
+       slaves.push_back(getProxySlave("192.168.0.241", 9000, num));
+   }
+   masterTask(slaves);
+   getchar();
+   return 0;
 }
 

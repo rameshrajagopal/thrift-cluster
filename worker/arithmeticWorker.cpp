@@ -47,7 +47,7 @@ class ArithmeticServiceHandler : virtual public ArithmeticServiceIf {
 };
 
 int main(int argc, char **argv) {
-  int port = 9090;
+  int port = 9000;
   shared_ptr<ArithmeticServiceHandler> handler(new ArithmeticServiceHandler());
   shared_ptr<TProcessor> processor(new ArithmeticServiceProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
