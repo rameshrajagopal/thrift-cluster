@@ -1,6 +1,6 @@
 cscope.out
-server
-client 
-worker
 tags
 core
+cpp_server
+cpp_worker
+cpp_client
