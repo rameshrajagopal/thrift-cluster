@@ -12,6 +12,8 @@
 #include <thrift/server/TNonblockingServer.h>
 
 #include <atomic>
+#include <thread>
+#include <queue.h>
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -30,29 +32,32 @@ using namespace  ::tutorial::arithmetic::gen;
 
 class ArithmeticServiceHandler : virtual public ArithmeticServiceIf {
  public:
-  ArithmeticServiceHandler(std::vector<std::shared_ptr<ProxySlave>> & s):
-       slaves(s)
+  ArithmeticServiceHandler(Queue<int> & q, Queue<int> & res):
+      queue(q), resQ(res)
     {}
 
   int64_t add(const int32_t num1, const int32_t num2) {
-      processRequest(reqNum++, "Add", slaves);  
-      return num1 + num2;
+      queue.push(reqNum++);
+      int ret = resQ.pop();
+      return ret;
   }
 
   int64_t multiply(const int32_t num1, const int32_t num2) {
-      processRequest(reqNum++, "Multiply", slaves);  
-      return num1 * num2;
+      queue.push(reqNum++);
+      int ret = resQ.pop();
+      return ret;
   }
  private:
   std::atomic<int> reqNum {0};
-  std::vector<std::shared_ptr<ProxySlave>> & slaves;
+  Queue<int> & queue;
+  Queue<int> & resQ;
 };
 
-void masterTask(std::vector<std::shared_ptr<ProxySlave>> & slaves)
+void masterTask(Queue<int> & q, Queue<int> & resQ)
 {
   int port = 9090;
 
-  shared_ptr<ArithmeticServiceHandler> handler(new ArithmeticServiceHandler(slaves));
+  shared_ptr<ArithmeticServiceHandler> handler(new ArithmeticServiceHandler(q, resQ));
   shared_ptr<TProcessor> processor(new ArithmeticServiceProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new TFramedTransportFactory());
@@ -69,14 +74,23 @@ void masterTask(std::vector<std::shared_ptr<ProxySlave>> & slaves)
   server.serve();
 }
 
-#define MAX_NUM_SLAVES  (1)
+int ProxySlaveTask(Queue<int> & q, Queue<int> & resQ);
 int main(int argc, char **argv) 
 {
-   std::vector<std::shared_ptr<ProxySlave>> slaves;
-   for (int num = 0; num < MAX_NUM_SLAVES; ++num) {
-       slaves.push_back(getProxySlave("192.168.0.241", 9000, num));
+   Queue<int> q;
+   Queue<int> resQ;
+   ProxySlaveTask(q, resQ);
+
+   std::thread th([&q, &resQ]() {
+      masterTask(q, resQ);
+   });
+   th.detach();
+#ifdef TEST
+   for (int num = 0; num < 10; ++num) {
+        q.push(num);
+        usleep(100 * 1000);
    }
-   masterTask(slaves);
+#endif
    getchar();
    return 0;
 }

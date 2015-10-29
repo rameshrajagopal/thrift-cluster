@@ -34,13 +34,13 @@ class ArithmeticServiceHandler : virtual public ArithmeticServiceIf {
 
   int64_t add(const int32_t num1, const int32_t num2) {
       DBG_PRINT("%s: %d %d\n", __FUNCTION__, num1, num2);
-      usleep(500 * 1000); 
+      usleep(100 * 1000);
       return num1 + num2;
   }
 
   int64_t multiply(const int32_t num1, const int32_t num2) {
       DBG_PRINT("%s: %d %d\n", __FUNCTION__, num1, num2);
-      usleep(1000 * 1000);
+      usleep(100 * 1000);
       return num1 * num2;
   }
 

@@ -1,0 +1,1 @@
+g++ -g -std=c++11 -o cpp_client -I../common -I../gen-cpp/ -L /home/indix/ind9/thrift/thrift/lib/cpp/.libs client.cpp ../gen-cpp/ArithmeticService.cpp -lthriftnb -lthrift -levent
