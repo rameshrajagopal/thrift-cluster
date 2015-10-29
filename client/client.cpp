@@ -30,9 +30,8 @@
 #include "../gen-cpp/ArithmeticService.h"
 #include <thread>
 #include "queue.h"
-#include "response.h"
-#include "request.h"
 #include <atomic>
+#include <chrono>
 
 #define SERVER_IP  "192.168.0.241"
 #define SERVER_PORT 9000
@@ -51,86 +50,6 @@ static std::atomic<int> n_errors {0};
 static std::atomic<int> min_time {INT_MAX};
 static std::atomic<int> max_time {INT_MIN};
 
-class ProxySlave
-{
-public:
-    ProxySlave(int num, const string addr, const int port):
-        id(num),
-        socket(new TSocket(addr, port)), 
-        transport(new TFramedTransport(socket)), 
-        protocol(new TBinaryProtocol(transport)),
-        client(protocol)
-    {
-        cout << "Slave at " << addr << ":" << port << endl;
-    }
-    void task() 
-    {
-        cout << "Slave Task  " << id << endl;
-        try {
-            transport->open();
-            while (true) { 
-                auto req = q.pop();
-                cout << "got the request" << endl;
-                int32_t ret  = client.multiply(10, 20);
-                if (ret > 0) ret = 0;
-                req->updateResponse(id, ret);
-                cout << "response: " << ret << endl;
-            }
-            transport->close();
-        } catch(TException & tx) {
-            std::cout << "ERROR: " << tx.what() << std::endl;
-        }
-    }
-    void send(shared_ptr<Request> req)
-    {
-        cout << "Request sending to slave" << endl;
-        q.push(req);
-    }
-private:
-    int id;
-    boost::shared_ptr<TTransport> socket;
-    boost::shared_ptr<TTransport> transport;
-    boost::shared_ptr<TProtocol> protocol;
-    ArithmeticServiceConcurrentClient client;
-    Queue<shared_ptr<Request>> q;
-};
-
-void processRequest(int reqNum, const string & req, vector<shared_ptr<ProxySlave>> & slaves)
-{
-    Response res(slaves.size());
-    shared_ptr<Request> request = make_shared<Request> (reqNum, req, res);
-
-    for (shared_ptr<ProxySlave> & slave: slaves) {
-        slave->send(request);
-    }
-    res.wait();
-    /* analyse the error and do whatever needs to be done */
-}
-
-shared_ptr<ProxySlave> getProxySlave(const string & addr, const int port, int id)
-{
-    shared_ptr<ProxySlave> slave = make_shared<ProxySlave> (id, addr, port);
-    thread th([slave]() {
-       slave->task();
-    });
-    th.detach();
-}
-
-int getDiffTime(struct timeval tstart, struct timeval tend)
-{
-    struct timeval tdiff;
-
-    //cout << "v " << tstart.tv_sec << " " << tstart.tv_usec << endl;
-    if (tend.tv_usec < tstart.tv_usec) {
-        tdiff.tv_sec = tend.tv_sec - tstart.tv_sec - 1;
-        tdiff.tv_usec = 1000000 + tend.tv_usec - tstart.tv_usec;
-    } else {
-        tdiff.tv_sec = tend.tv_sec - tstart.tv_sec;
-        tdiff.tv_usec = tend.tv_usec - tstart.tv_usec;
-    }
-    return (tdiff.tv_sec * 1000 + (tdiff.tv_usec/1000));
-}
-
 int ProxySlaveTask(const char * host, int port, int max_threads, int max_requests)
 {
     /* do the work */
@@ -147,19 +66,19 @@ int ProxySlaveTask(const char * host, int port, int max_threads, int max_request
             srandom((unsigned) time(NULL));
             try {
                 transport->open();
-                struct timeval starttime, endtime;
                 for (int num = 0; num < max_requests; ++num) {
-                   gettimeofday(&starttime, NULL);
+                   std::chrono::high_resolution_clock::time_point begin = 
+                       std::chrono::high_resolution_clock::now();
                    int32_t ret  = client.multiply(10, 20);
-                   gettimeofday(&endtime, NULL);
-                   int time_taken = getDiffTime(starttime, endtime);
+                   int64_t time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - begin).count();
+                   int32_t time_taken = time/1000000;
                    if (time_taken < min_time) min_time = time_taken;
                    if (time_taken > max_time) max_time = time_taken;
                    total_time += time_taken;
                    if (ret < 0) {
                      ++n_errors;
                    }
-                   usleep(within(400 * 1000));
+                   this_thread::sleep_for(chrono::milliseconds(within(200)));
                 }
                 transport->close();
             } catch (TException & tx) {

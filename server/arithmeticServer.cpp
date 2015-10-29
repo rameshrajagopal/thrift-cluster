@@ -82,6 +82,7 @@ void masterTask(Queue<int> & q, Queue<int> & resQ)
                                                              protocolFactory, 
                                                              port,
                                                              threadManager));
+      server->setNumIOThreads(10);
 #elif THREAD_POOL
   shared_ptr<TServer> server =
     shared_ptr<TServer>(new TThreadPoolServer(processor,
@@ -94,7 +95,8 @@ void masterTask(Queue<int> & q, Queue<int> & resQ)
     shared_ptr<TServer>(new TThreadedServer(processor,
                                             serverTransport,
                                             transportFactory,
-                                            protocolFactory));
+                                            protocolFactory,
+                                            threadFactory));
 #endif
   server->serve();
 }

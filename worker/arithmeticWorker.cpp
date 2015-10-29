@@ -74,6 +74,7 @@ int main(int argc, char **argv) {
                                                              protocolFactory, 
                                                              port,
                                                              threadManager));
+  server->setNumIOThreads(10);
 #elif THREAD_POOL
   shared_ptr<TServer> server =
     shared_ptr<TServer>(new TThreadPoolServer(processor,
@@ -86,7 +87,8 @@ int main(int argc, char **argv) {
     shared_ptr<TServer>(new TThreadedServer(processor,
                                             serverTransport,
                                             transportFactory,
-                                            protocolFactory));
+                                            protocolFactory,
+                                            threadFactory));
 #endif
   server->serve();
   return 0;
