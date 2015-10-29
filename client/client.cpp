@@ -137,7 +137,11 @@ int ProxySlaveTask(const char * host, int port, int max_threads, int max_request
     for (int t = 0; t < max_threads; ++t) {
         thread th([t, host, port, max_requests]() {
             boost::shared_ptr<TTransport> socket(new TSocket(host, port));
+#ifdef NON_BLOCKING
             boost::shared_ptr<TTransport> transport(new TFramedTransport(socket));
+#else
+            boost::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+#endif
             boost::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
             ArithmeticServiceConcurrentClient client(protocol);
             srandom((unsigned) time(NULL));

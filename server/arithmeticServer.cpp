@@ -6,6 +6,8 @@
 #include <thrift/server/TSimpleServer.h>
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/TBufferTransports.h>
+#include <thrift/server/TThreadPoolServer.h>
+#include <thrift/server/TThreadedServer.h>
 
 #include <thrift/concurrency/ThreadManager.h>
 #include <thrift/concurrency/PosixThreadFactory.h>
@@ -60,7 +62,13 @@ void masterTask(Queue<int> & q, Queue<int> & resQ)
   shared_ptr<ArithmeticServiceHandler> handler(new ArithmeticServiceHandler(q, resQ));
   shared_ptr<TProcessor> processor(new ArithmeticServiceProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
+#ifdef NON_BLOCKING
   shared_ptr<TTransportFactory> transportFactory(new TFramedTransportFactory());
+#elif THREAD_POOL
+  shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
+#else
+  shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
+#endif
   shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
 
   shared_ptr<ThreadManager> threadManager =  ThreadManager::newSimpleThreadManager(MAX_NUM_THREADS);
@@ -68,10 +76,27 @@ void masterTask(Queue<int> & q, Queue<int> & resQ)
   threadManager->threadFactory(threadFactory);
   threadManager->start();
 
-  //TSimpleServer server(processor, serverTransport, transportFactory, protocolFactory);
-  TNonblockingServer server(processor, protocolFactory, port, threadManager);
-  server.setNumIOThreads(2);
-  server.serve();
+#ifdef NON_BLOCKING
+  shared_ptr<TNonblockingServer> server = 
+      shared_ptr<TNonblockingServer> (new TNonblockingServer(processor, 
+                                                             protocolFactory, 
+                                                             port,
+                                                             threadManager));
+#elif THREAD_POOL
+  shared_ptr<TServer> server =
+    shared_ptr<TServer>(new TThreadPoolServer(processor,
+                                              serverTransport,
+                                              transportFactory,
+                                              protocolFactory,
+                                              threadManager));
+#else
+  shared_ptr<TServer> server =
+    shared_ptr<TServer>(new TThreadedServer(processor,
+                                            serverTransport,
+                                            transportFactory,
+                                            protocolFactory));
+#endif
+  server->serve();
 }
 
 int ProxySlaveTask(Queue<int> & q, Queue<int> & resQ);

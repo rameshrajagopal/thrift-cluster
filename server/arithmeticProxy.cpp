@@ -116,7 +116,11 @@ int ProxySlaveTask(Queue<int> & q, Queue<int> & resQ)
     for (int t = 0; t < 1; ++t) {
         thread th([t, &q, &resQ]() {
             boost::shared_ptr<TTransport> socket(new TSocket(SERVER_IP, SERVER_PORT));
+#ifdef NON_BLOCKING
             boost::shared_ptr<TTransport> transport(new TFramedTransport(socket));
+#else
+            boost::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+#endif
             boost::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
             ArithmeticServiceConcurrentClient client(protocol);
             try {
